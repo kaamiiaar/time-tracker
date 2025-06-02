@@ -2,96 +2,129 @@ import { loadRecordForDate } from "./today.js";
 
 let db, activateTab;
 
-export function init(dbInstance, activateTabFn) {
+export async function init(dbInstance, activateTabFn) {
   db = dbInstance;
   activateTab = activateTabFn;
-  populateTable();
+  await populateTable();
 }
 
-export function populateTable() {
+export async function populateTable() {
   const tbody = document.querySelector("#records-table tbody");
   const recordsContent = document.getElementById("records-content");
 
-  tbody.innerHTML = "";
-  const records = db.getAllRecords();
-
-  if (records.length === 0) {
-    recordsContent.innerHTML = `
-            <div class="empty-state">
-                <div style="font-size: 3rem; margin-bottom: 20px;">📊</div>
-                <h3>No records yet!</h3>
-                <p>Start tracking your time to see your productivity records here.</p>
-                <button onclick="document.querySelector('nav a[href=&quot;#today&quot;]').click()">
-                    📅 Go to Today
-                </button>
-            </div>
-        `;
+  if (!tbody || !recordsContent) {
+    console.error("Required DOM elements not found for records table");
     return;
   }
 
-  // Restore table if it was replaced with empty state
-  if (!document.querySelector("#records-table")) {
+  tbody.innerHTML = "";
+
+  try {
+    const recordsResult = await db.getAllRecords();
+    const records = Array.isArray(recordsResult) ? recordsResult : [];
+
+    if (records.length === 0) {
+      recordsContent.innerHTML = `
+              <div class="empty-state">
+                  <div style="font-size: 3rem; margin-bottom: 20px;">📊</div>
+                  <h3>No records yet!</h3>
+                  <p>Start tracking your time to see your productivity records here.</p>
+                  <button onclick="document.querySelector('nav a[href=&quot;#today&quot;]').click()">
+                      📅 Go to Today
+                  </button>
+              </div>
+          `;
+      return;
+    }
+
+    // Restore table if it was replaced with empty state
+    if (!document.querySelector("#records-table")) {
+      recordsContent.innerHTML = `
+              <table id="records-table">
+                  <thead>
+                      <tr>
+                          <th>📅 Date</th>
+                          <th>⏰ Hours</th>
+                          <th>💪 Workout</th>
+                          <th>🛠️ Actions</th>
+                      </tr>
+                  </thead>
+                  <tbody></tbody>
+              </table>
+          `;
+    }
+
+    const newTbody = document.querySelector("#records-table tbody");
+    if (!newTbody) {
+      console.error("Table tbody not found after recreation");
+      return;
+    }
+
+    records.forEach((record, index) => {
+      // Ensure record is a valid object
+      if (!record || typeof record !== "object") {
+        console.warn("Invalid record:", record);
+        return;
+      }
+
+      const tr = document.createElement("tr");
+      tr.style.animationDelay = `${index * 0.1}s`;
+      tr.className = "fade-in-row";
+
+      const workoutEmoji = record.workout === "Yes" ? "✅" : "❌";
+      const formattedDate = formatDate(record.date || "");
+      const hoursDisplay = parseFloat(record.hours || 0).toFixed(1);
+
+      tr.innerHTML = `
+              <td>
+                  <strong>${formattedDate}</strong>
+                  <br><small>${getDayOfWeek(record.date || "")}</small>
+              </td>
+              <td>
+                  <span class="hours-badge ${getHoursBadgeClass(
+                    record.hours || 0
+                  )}">${hoursDisplay}h</span>
+              </td>
+              <td>
+                  <span class="workout-status">${workoutEmoji}</span>
+              </td>
+              <td>
+                  <button class="edit-btn" title="Edit this record">
+                      ✏️ Edit
+                  </button>
+                  <button class="delete-btn danger" title="Delete this record">
+                      🗑️ Delete
+                  </button>
+              </td>
+          `;
+
+      newTbody.appendChild(tr);
+
+      // Add event listeners
+      const editBtn = tr.querySelector(".edit-btn");
+      const deleteBtn = tr.querySelector(".delete-btn");
+
+      if (editBtn && deleteBtn && record.date) {
+        editBtn.addEventListener("click", () => editRecord(record.date));
+        deleteBtn.addEventListener("click", () => deleteRecord(record.date));
+      }
+    });
+
+    // Add CSS animations if not already added
+    addAnimationStyles();
+  } catch (error) {
+    console.error("Error loading records:", error);
     recordsContent.innerHTML = `
-            <table id="records-table">
-                <thead>
-                    <tr>
-                        <th>📅 Date</th>
-                        <th>⏰ Hours</th>
-                        <th>💪 Workout</th>
-                        <th>🛠️ Actions</th>
-                    </tr>
-                </thead>
-                <tbody></tbody>
-            </table>
-        `;
+      <div class="empty-state">
+          <div style="font-size: 3rem; margin-bottom: 20px;">❌</div>
+          <h3>Error loading records</h3>
+          <p>There was an error loading your records. Please check your connection and try again.</p>
+          <button onclick="window.location.reload()">
+              🔄 Refresh Page
+          </button>
+      </div>
+    `;
   }
-
-  const newTbody = document.querySelector("#records-table tbody");
-
-  records.forEach((record, index) => {
-    const tr = document.createElement("tr");
-    tr.style.animationDelay = `${index * 0.1}s`;
-    tr.className = "fade-in-row";
-
-    const workoutEmoji = record.workout === "Yes" ? "✅" : "❌";
-    const formattedDate = formatDate(record.date);
-    const hoursDisplay = parseFloat(record.hours).toFixed(1);
-
-    tr.innerHTML = `
-            <td>
-                <strong>${formattedDate}</strong>
-                <br><small>${getDayOfWeek(record.date)}</small>
-            </td>
-            <td>
-                <span class="hours-badge ${getHoursBadgeClass(
-                  record.hours
-                )}">${hoursDisplay}h</span>
-            </td>
-            <td>
-                <span class="workout-status">${workoutEmoji}</span>
-            </td>
-            <td>
-                <button class="edit-btn" title="Edit this record">
-                    ✏️ Edit
-                </button>
-                <button class="delete-btn danger" title="Delete this record">
-                    🗑️ Delete
-                </button>
-            </td>
-        `;
-
-    newTbody.appendChild(tr);
-
-    // Add event listeners
-    const editBtn = tr.querySelector(".edit-btn");
-    const deleteBtn = tr.querySelector(".delete-btn");
-
-    editBtn.addEventListener("click", () => editRecord(record.date));
-    deleteBtn.addEventListener("click", () => deleteRecord(record.date));
-  });
-
-  // Add CSS animations if not already added
-  addAnimationStyles();
 }
 
 function editRecord(date) {
@@ -102,7 +135,7 @@ function editRecord(date) {
   showNotification(`📝 Editing record for ${formatDate(date)}`, "info");
 }
 
-function deleteRecord(date) {
+async function deleteRecord(date) {
   const formattedDate = formatDate(date);
 
   if (
@@ -110,15 +143,24 @@ function deleteRecord(date) {
       `🗑️ Are you sure you want to delete the record for ${formattedDate}?\n\nThis action cannot be undone.`
     )
   ) {
-    if (db.deleteRecord(date)) {
-      populateTable();
+    try {
+      const success = await db.deleteRecord(date);
+      if (success) {
+        await populateTable(); // Refresh the table
+        showNotification(
+          `✅ Record for ${formattedDate} deleted successfully`,
+          "success"
+        );
+      } else {
+        showNotification(
+          `❌ Failed to delete record for ${formattedDate}`,
+          "error"
+        );
+      }
+    } catch (error) {
+      console.error("Error deleting record:", error);
       showNotification(
-        `✅ Record for ${formattedDate} deleted successfully`,
-        "success"
-      );
-    } else {
-      showNotification(
-        `❌ Failed to delete record for ${formattedDate}`,
+        `❌ Error deleting record for ${formattedDate}`,
         "error"
       );
     }
@@ -126,17 +168,35 @@ function deleteRecord(date) {
 }
 
 function formatDate(dateString) {
-  const date = new Date(dateString);
-  return date.toLocaleDateString("en-US", {
-    year: "numeric",
-    month: "short",
-    day: "numeric",
-  });
+  if (!dateString) return "Invalid Date";
+
+  try {
+    const date = new Date(dateString);
+    if (isNaN(date.getTime())) return "Invalid Date";
+
+    return date.toLocaleDateString("en-US", {
+      year: "numeric",
+      month: "short",
+      day: "numeric",
+    });
+  } catch (error) {
+    console.warn("Error formatting date:", dateString, error);
+    return "Invalid Date";
+  }
 }
 
 function getDayOfWeek(dateString) {
-  const date = new Date(dateString);
-  return date.toLocaleDateString("en-US", { weekday: "long" });
+  if (!dateString) return "";
+
+  try {
+    const date = new Date(dateString);
+    if (isNaN(date.getTime())) return "";
+
+    return date.toLocaleDateString("en-US", { weekday: "long" });
+  } catch (error) {
+    console.warn("Error getting day of week:", dateString, error);
+    return "";
+  }
 }
 
 function getHoursBadgeClass(hours) {

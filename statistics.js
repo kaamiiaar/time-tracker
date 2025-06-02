@@ -296,10 +296,16 @@ function updateChartData(stats) {
     return;
   }
 
+  // Ensure stats and recentData are valid
+  if (!stats || !stats.recentData || !Array.isArray(stats.recentData)) {
+    console.warn("Invalid stats data for chart update:", stats);
+    return;
+  }
+
   // Format data for Chart.js
-  const labels = stats.recentData.map((d) => d.date);
-  const hoursData = stats.recentData.map((d) => parseFloat(d.hours));
-  const workoutData = stats.recentData.map((d) => (d.workout ? 1 : 0));
+  const labels = stats.recentData.map((d) => d?.date || "");
+  const hoursData = stats.recentData.map((d) => parseFloat(d?.hours || 0));
+  const workoutData = stats.recentData.map((d) => (d?.workout ? 1 : 0));
 
   // Update chart data
   chart.data.labels = labels;
@@ -374,15 +380,26 @@ function updateStatsSummary(stats) {
 function generateInsights(stats) {
   const insights = [];
 
-  if (stats.avgHours >= 8) {
+  // Ensure stats object is valid
+  if (!stats || typeof stats !== "object") {
+    return insights
+      .map((insight) => `<div class="insight-item">${insight}</div>`)
+      .join("");
+  }
+
+  const avgHours = stats.avgHours || 0;
+  const workoutPercentage = stats.workoutPercentage || 0;
+  const recentData = Array.isArray(stats.recentData) ? stats.recentData : [];
+
+  if (avgHours >= 8) {
     insights.push(
       "🌟 Excellent productivity! You're consistently working full days."
     );
-  } else if (stats.avgHours >= 6) {
+  } else if (avgHours >= 6) {
     insights.push(
       "👍 Good work habits! You're maintaining solid productivity."
     );
-  } else if (stats.avgHours >= 4) {
+  } else if (avgHours >= 4) {
     insights.push(
       "📈 Room for improvement. Consider setting higher daily goals."
     );
@@ -392,11 +409,11 @@ function generateInsights(stats) {
     );
   }
 
-  if (stats.workoutPercentage >= 80) {
+  if (workoutPercentage >= 80) {
     insights.push(
       "💪 Amazing workout consistency! Keep up the healthy lifestyle."
     );
-  } else if (stats.workoutPercentage >= 50) {
+  } else if (workoutPercentage >= 50) {
     insights.push(
       "🏃‍♂️ Good workout routine! Try to be more consistent for better results."
     );
@@ -406,10 +423,10 @@ function generateInsights(stats) {
     );
   }
 
-  if (stats.recentData.length >= 7) {
-    const recentWeek = stats.recentData.slice(-7);
+  if (recentData.length >= 7) {
+    const recentWeek = recentData.slice(-7);
     const weekTotal = recentWeek.reduce(
-      (sum, day) => sum + parseFloat(day.hours),
+      (sum, day) => sum + parseFloat(day?.hours || 0),
       0
     );
     if (weekTotal >= 40) {

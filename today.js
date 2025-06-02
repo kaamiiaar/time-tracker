@@ -56,8 +56,14 @@ export function init(dbInstance) {
   }
 
   function loadTimeEntries(date) {
-    const entries = db.getTimeEntries(date);
+    const entriesResult = db.getTimeEntries(date);
+    const entries = Array.isArray(entriesResult) ? entriesResult : [];
     const entriesList = document.getElementById("time-entries-list");
+
+    if (!entriesList) {
+      console.error("Time entries list element not found");
+      return;
+    }
 
     if (entries.length === 0) {
       entriesList.innerHTML = `
@@ -83,16 +89,26 @@ export function init(dbInstance) {
 
     const entriesHtml = entries
       .map((entry) => {
-        const formattedTime = formatHoursToHMS(entry.hours);
-        const timestamp = formatTimestamp(entry.created_at);
+        // Ensure entry is a valid object with required properties
+        if (!entry || typeof entry !== "object") {
+          console.warn("Invalid entry:", entry);
+          return "";
+        }
+
+        const formattedTime = formatHoursToHMS(entry.hours || 0);
+        const timestamp = formatTimestamp(
+          entry.created_at || new Date().toISOString()
+        );
         const icon = entry.type === "manual" ? "✏️" : "⏱️";
         const typeLabel =
           entry.type === "manual" ? "Manual Entry" : "Stopwatch Session";
 
         return `
-        <div class="time-entry ${entry.type}">
+        <div class="time-entry ${entry.type || "manual"}">
           <div class="entry-checkbox">
-            <input type="checkbox" class="entry-select" value="${entry.id}" onchange="window.todayModule.updateBulkControls()">
+            <input type="checkbox" class="entry-select" value="${
+              entry.id || ""
+            }" onchange="window.todayModule.updateBulkControls()">
           </div>
           <div class="entry-info">
             <div class="entry-type">${icon} ${typeLabel}</div>
@@ -100,13 +116,16 @@ export function init(dbInstance) {
             <div class="entry-timestamp">${timestamp}</div>
           </div>
           <div class="entry-actions">
-            <button class="delete-entry" onclick="window.todayModule.deleteEntry(${entry.id})">
+            <button class="delete-entry" onclick="window.todayModule.deleteEntry(${
+              entry.id || 0
+            })">
               🗑️ Delete
             </button>
           </div>
         </div>
       `;
       })
+      .filter((entry) => entry !== "") // Remove empty entries
       .join("");
 
     entriesList.innerHTML = bulkControls + entriesHtml;

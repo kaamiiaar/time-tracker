@@ -1,4 +1,4 @@
-import { init as initDB } from "./db.js";
+import { init as initDB } from "./supabase.js";
 import { init as initToday } from "./today.js";
 import { init as initRecords, populateTable } from "./records.js";
 import { init as initStatistics, updateChart } from "./statistics.js";
@@ -17,7 +17,7 @@ let db,
 
     // Initialize modules
     todayModule = initToday(db);
-    initRecords(db, activateTab);
+    await initRecords(db, activateTab);
     initStatistics(db);
 
     // Setup navigation
@@ -90,7 +90,7 @@ function activateTab(tabId, updateHistory = true) {
       // Today tab is always fresh
       break;
     case "records":
-      populateTable();
+      showRecords();
       break;
     case "statistics":
       updateChart();
@@ -301,3 +301,11 @@ window.TimeTracker = {
   getDatabase: () => db,
   getTodayModule: () => todayModule,
 };
+
+// Switch to records tab and refresh data
+async function showRecords() {
+  const recordsSection = document.getElementById("records-section");
+  if (recordsSection) {
+    await populateTable();
+  }
+}

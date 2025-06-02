@@ -1,0 +1,27 @@
+{
+  "name": "time-tracker-assistant",
+  "version": "2.0.0",
+  "description": "A beautiful productivity tracking application with Supabase integration",
+  "main": "index.html",
+  "scripts": {
+    "dev": "python3 -m http.server 8000",
+    "build": "echo 'No build step required for vanilla JS'",
+    "start": "python3 -m http.server 8000"
+  },
+  "keywords": [
+    "productivity",
+    "time-tracking",
+    "supabase",
+    "javascript",
+    "web-app"
+  ],
+  "author": "Your Name",
+  "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/yourusername/time-tracker.git"
+  },
+  "engines": {
+    "node": ">=14"
+  }
+}
