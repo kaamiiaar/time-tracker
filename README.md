@@ -211,3 +211,61 @@ If you encounter any issues:
 ---
 
 Made with ❤️ for productivity enthusiasts everywhere!
+
+# 🔽 Deployment Instructions
+
+## Vercel Deployment
+
+### 1. Deploy to Vercel
+
+1. **Connect your GitHub repository** to Vercel
+2. **Import your project** on vercel.com
+3. Vercel will automatically detect it as a static site
+
+### 2. Set Environment Variables
+
+In your Vercel project dashboard:
+
+1. Go to **Settings → Environment Variables**
+2. Add the following variables for **Production, Preview, and Development**:
+
+| Variable Name            | Value                         |
+| ------------------------ | ----------------------------- |
+| `VITE_SUPABASE_URL`      | Your Supabase project URL     |
+| `VITE_SUPABASE_ANON_KEY` | Your Supabase anon/public key |
+
+### 3. Redeploy
+
+After setting environment variables, trigger a new deployment:
+
+- Go to **Deployments** tab
+- Click **"Redeploy"** on your latest deployment
+
+### 4. Update Code and Deploy
+
+To deploy new changes:
+
+```bash
+git add .
+git commit -m "Your commit message"
+git push origin main
+```
+
+Vercel will automatically deploy the changes.
+
+## Environment Variables Setup
+
+The app uses a fallback system for environment variables:
+
+1. **Production**: Fetches from `/api/env` serverless function
+2. **Development**: Uses local `config.js` file (create from `config.example.js`)
+
+### For Local Development
+
+1. Copy `config.example.js` to `config.js`
+2. Add your Supabase credentials to `config.js`
+3. The file is gitignored for security
+
+### For Production
+
+Environment variables are set in Vercel dashboard and served via the `/api/env` endpoint.

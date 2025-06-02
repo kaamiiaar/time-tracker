@@ -1,56 +1,17 @@
-import { createClient } from "https://cdn.skypack.dev/@supabase/supabase-js@2.39.0";
+import { createClient } from "https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.39.0/+esm";
 
 let supabase;
 
 async function getEnvironmentVariables() {
-  // Try multiple sources for environment variables
+  // Try multiple sources for environment variables in order of preference
 
-  // 1. Try to load from local config.js (for development)
-  try {
-    const configModule = await import("./config.js");
-    if (
-      configModule.config &&
-      configModule.config.SUPABASE_URL &&
-      configModule.config.SUPABASE_ANON_KEY
-    ) {
-      return {
-        url: configModule.config.SUPABASE_URL,
-        key: configModule.config.SUPABASE_ANON_KEY,
-      };
-    }
-  } catch (error) {
-    console.log("No local config.js found, trying other methods...");
-  }
-
-  // 2. Check if running in Vite dev environment
-  if (typeof import.meta !== "undefined" && import.meta.env) {
-    const url = import.meta.env.VITE_SUPABASE_URL;
-    const key = import.meta.env.VITE_SUPABASE_ANON_KEY;
-    if (url && key) {
-      return { url, key };
-    }
-  }
-
-  // 3. Check window.ENV (set in HTML for Vercel)
-  if (typeof window !== "undefined" && window.ENV) {
-    const url = window.ENV.VITE_SUPABASE_URL;
-    const key = window.ENV.VITE_SUPABASE_ANON_KEY;
-    if (
-      url &&
-      key &&
-      url !== "%VITE_SUPABASE_URL%" &&
-      key !== "%VITE_SUPABASE_ANON_KEY%"
-    ) {
-      return { url, key };
-    }
-  }
-
-  // 4. Try to fetch from Vercel API endpoint
+  // 1. Try to fetch from Vercel API endpoint (production)
   try {
     const response = await fetch("/api/env");
     if (response.ok) {
       const env = await response.json();
       if (env.VITE_SUPABASE_URL && env.VITE_SUPABASE_ANON_KEY) {
+        console.log("✅ Environment variables loaded from Vercel API");
         return {
           url: env.VITE_SUPABASE_URL,
           key: env.VITE_SUPABASE_ANON_KEY,
@@ -61,11 +22,40 @@ async function getEnvironmentVariables() {
     console.log("Could not fetch from API endpoint:", error.message);
   }
 
-  // 5. Check process.env (Node.js environment)
+  // 2. Try to load from local config.js (for development)
+  try {
+    const configModule = await import("./config.js");
+    if (
+      configModule.config &&
+      configModule.config.SUPABASE_URL &&
+      configModule.config.SUPABASE_ANON_KEY
+    ) {
+      console.log("✅ Environment variables loaded from local config");
+      return {
+        url: configModule.config.SUPABASE_URL,
+        key: configModule.config.SUPABASE_ANON_KEY,
+      };
+    }
+  } catch (error) {
+    console.log("No local config.js found, which is expected in production");
+  }
+
+  // 3. Check if running in Vite dev environment
+  if (typeof import.meta !== "undefined" && import.meta.env) {
+    const url = import.meta.env.VITE_SUPABASE_URL;
+    const key = import.meta.env.VITE_SUPABASE_ANON_KEY;
+    if (url && key) {
+      console.log("✅ Environment variables loaded from Vite");
+      return { url, key };
+    }
+  }
+
+  // 4. Check process.env (Node.js environment)
   if (typeof process !== "undefined" && process.env) {
     const url = process.env.VITE_SUPABASE_URL;
     const key = process.env.VITE_SUPABASE_ANON_KEY;
     if (url && key) {
+      console.log("✅ Environment variables loaded from process.env");
       return { url, key };
     }
   }
