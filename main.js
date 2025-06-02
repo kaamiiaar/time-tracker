@@ -25,7 +25,7 @@ let db,
 
     // Hide loading and show initial tab
     hideLoading();
-    activateTab("today");
+    await activateTab("today");
 
     console.log("✅ Time Tracker Assistant initialized successfully!");
   } catch (error) {
@@ -38,22 +38,22 @@ function setupNavigation() {
   const navLinks = document.querySelectorAll("nav a");
 
   navLinks.forEach((link) => {
-    link.addEventListener("click", (e) => {
+    link.addEventListener("click", async (e) => {
       e.preventDefault();
       const tabId = e.target.getAttribute("href").substring(1);
-      activateTab(tabId);
+      await activateTab(tabId);
     });
   });
 
   // Handle browser back/forward
-  window.addEventListener("popstate", (e) => {
+  window.addEventListener("popstate", async (e) => {
     if (e.state && e.state.tab) {
-      activateTab(e.state.tab, false);
+      await activateTab(e.state.tab, false);
     }
   });
 }
 
-function activateTab(tabId, updateHistory = true) {
+async function activateTab(tabId, updateHistory = true) {
   if (currentTab === tabId) return;
 
   const navLinks = document.querySelectorAll("nav a");
@@ -93,7 +93,7 @@ function activateTab(tabId, updateHistory = true) {
       showRecords();
       break;
     case "statistics":
-      updateChart();
+      await updateChart();
       break;
   }
 
@@ -286,11 +286,11 @@ function addErrorStyles() {
 }
 
 // Handle initial page load with hash
-window.addEventListener("DOMContentLoaded", () => {
+window.addEventListener("DOMContentLoaded", async () => {
   const hash = window.location.hash.substring(1);
   if (hash && ["today", "records", "statistics"].includes(hash)) {
     // Wait for initialization to complete
-    setTimeout(() => activateTab(hash), 100);
+    setTimeout(async () => await activateTab(hash), 100);
   }
 });
 

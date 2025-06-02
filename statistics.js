@@ -48,7 +48,7 @@ function waitForChart() {
   });
 }
 
-export function updateChart() {
+export async function updateChart() {
   // Ensure we have a valid database connection
   if (!db) {
     console.error("Database not initialized");
@@ -56,46 +56,53 @@ export function updateChart() {
     return;
   }
 
-  const stats = db.getStatistics();
+  try {
+    const stats = await db.getStatistics();
 
-  if (stats.recentData.length === 0) {
-    showEmptyState();
-    return;
+    if (!stats || !stats.recentData || stats.recentData.length === 0) {
+      showEmptyState();
+      return;
+    }
+
+    // Hide empty state if it exists
+    const emptyState = document.querySelector(
+      "#statistics-section .empty-state"
+    );
+    if (emptyState) {
+      emptyState.remove();
+    }
+
+    // Ensure chart container exists
+    const chartContainer = document.querySelector(".chart-container");
+    if (!chartContainer) {
+      console.error("Chart container not found");
+      return;
+    }
+
+    if (!document.querySelector("#stats-chart")) {
+      chartContainer.innerHTML =
+        '<canvas id="stats-chart" width="400" height="200"></canvas>';
+
+      // Wait for Chart.js to be available before setting up
+      waitForChart()
+        .then(() => {
+          setupChart();
+          updateChartData(stats);
+          updateStatsSummary(stats);
+        })
+        .catch((error) => {
+          console.error("Chart.js not available:", error);
+          showChartError();
+        });
+      return;
+    }
+
+    updateChartData(stats);
+    updateStatsSummary(stats);
+  } catch (error) {
+    console.error("Failed to get statistics:", error);
+    showChartError();
   }
-
-  // Hide empty state if it exists
-  const emptyState = document.querySelector("#statistics-section .empty-state");
-  if (emptyState) {
-    emptyState.remove();
-  }
-
-  // Ensure chart container exists
-  const chartContainer = document.querySelector(".chart-container");
-  if (!chartContainer) {
-    console.error("Chart container not found");
-    return;
-  }
-
-  if (!document.querySelector("#stats-chart")) {
-    chartContainer.innerHTML =
-      '<canvas id="stats-chart" width="400" height="200"></canvas>';
-
-    // Wait for Chart.js to be available before setting up
-    waitForChart()
-      .then(() => {
-        setupChart();
-        updateChartData(stats);
-        updateStatsSummary(stats);
-      })
-      .catch((error) => {
-        console.error("Chart.js not available:", error);
-        showChartError();
-      });
-    return;
-  }
-
-  updateChartData(stats);
-  updateStatsSummary(stats);
 }
 
 function setupChart() {

@@ -1,0 +1,274 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Supabase Debug</title>
+    <style>
+      body {
+        font-family: Arial, sans-serif;
+        max-width: 800px;
+        margin: 20px auto;
+        padding: 20px;
+      }
+      .result {
+        padding: 10px;
+        margin: 10px 0;
+        border-radius: 5px;
+      }
+      .success {
+        background: #d4edda;
+        color: #155724;
+      }
+      .error {
+        background: #f8d7da;
+        color: #721c24;
+      }
+      .info {
+        background: #d1ecf1;
+        color: #0c5460;
+      }
+      pre {
+        background: #f8f9fa;
+        padding: 10px;
+        border-radius: 3px;
+        overflow-x: auto;
+      }
+      button {
+        padding: 10px 20px;
+        margin: 10px 5px;
+      }
+    </style>
+  </head>
+  <body>
+    <h1>🔍 Supabase Connection Debug</h1>
+    <div id="results"></div>
+
+    <button onclick="testConnection()">Test Basic Connection</button>
+    <button onclick="testTables()">Test Table Access</button>
+    <button onclick="testPolicies()">Test RLS Policies</button>
+    <button onclick="testInsert()">Test Insert</button>
+    <button onclick="fixDatabase()">Fix Database Issues</button>
+
+    <script type="module">
+      import { createClient } from "https://cdn.skypack.dev/@supabase/supabase-js@2.39.0";
+      import { config } from "./config.js";
+
+      const supabase = createClient(
+        config.SUPABASE_URL,
+        config.SUPABASE_ANON_KEY
+      );
+
+      function addResult(message, type = "info") {
+        const resultsDiv = document.getElementById("results");
+        const div = document.createElement("div");
+        div.className = `result ${type}`;
+        div.innerHTML = message;
+        resultsDiv.appendChild(div);
+      }
+
+      window.testConnection = async function () {
+        document.getElementById("results").innerHTML = "";
+        addResult("🔌 Testing basic Supabase connection...", "info");
+
+        try {
+          // Test basic connection
+          const { data, error } = await supabase
+            .from("daily_records")
+            .select("count")
+            .limit(1);
+
+          if (error) {
+            addResult(`❌ Connection Error: ${error.message}`, "error");
+            addResult(`Error Code: ${error.code}`, "error");
+            addResult(`Error Details: ${error.details}`, "error");
+            addResult(`Error Hint: ${error.hint}`, "error");
+          } else {
+            addResult("✅ Basic connection successful!", "success");
+          }
+        } catch (err) {
+          addResult(`❌ JavaScript Error: ${err.message}`, "error");
+        }
+      };
+
+      window.testTables = async function () {
+        addResult("📊 Testing table structure...", "info");
+
+        try {
+          // Test daily_records table
+          const { data: dailyData, error: dailyError } = await supabase
+            .from("daily_records")
+            .select("*")
+            .limit(5);
+
+          if (dailyError) {
+            addResult(
+              `❌ daily_records table error: ${dailyError.message}`,
+              "error"
+            );
+          } else {
+            addResult(
+              `✅ daily_records table accessible. Found ${dailyData.length} records`,
+              "success"
+            );
+            if (dailyData.length > 0) {
+              addResult(
+                `Sample record: <pre>${JSON.stringify(
+                  dailyData[0],
+                  null,
+                  2
+                )}</pre>`,
+                "info"
+              );
+            }
+          }
+
+          // Test time_entries table
+          const { data: entriesData, error: entriesError } = await supabase
+            .from("time_entries")
+            .select("*")
+            .limit(5);
+
+          if (entriesError) {
+            addResult(
+              `❌ time_entries table error: ${entriesError.message}`,
+              "error"
+            );
+          } else {
+            addResult(
+              `✅ time_entries table accessible. Found ${entriesData.length} records`,
+              "success"
+            );
+            if (entriesData.length > 0) {
+              addResult(
+                `Sample entry: <pre>${JSON.stringify(
+                  entriesData[0],
+                  null,
+                  2
+                )}</pre>`,
+                "info"
+              );
+            }
+          }
+        } catch (err) {
+          addResult(`❌ JavaScript Error: ${err.message}`, "error");
+        }
+      };
+
+      window.testPolicies = async function () {
+        addResult("🔒 Testing RLS policies...", "info");
+
+        try {
+          // Test if we can query today's date specifically
+          const today = new Date().toISOString().split("T")[0];
+          addResult(`Testing query for today: ${today}`, "info");
+
+          const { data, error } = await supabase
+            .from("daily_records")
+            .select("hours, workout")
+            .eq("date", today)
+            .single();
+
+          if (error) {
+            if (error.code === "PGRST116") {
+              addResult(
+                `✅ No data found for today (${today}) - this is normal if you haven't tracked anything yet`,
+                "success"
+              );
+            } else {
+              addResult(`❌ Policy/Query Error: ${error.message}`, "error");
+              addResult(`Error Code: ${error.code}`, "error");
+            }
+          } else {
+            addResult(
+              `✅ Successfully queried today's data: ${JSON.stringify(data)}`,
+              "success"
+            );
+          }
+        } catch (err) {
+          addResult(`❌ JavaScript Error: ${err.message}`, "error");
+        }
+      };
+
+      window.testInsert = async function () {
+        addResult("➕ Testing insert operation...", "info");
+
+        try {
+          const testDate = new Date().toISOString().split("T")[0];
+
+          // Try to insert a test record
+          const { data, error } = await supabase
+            .from("daily_records")
+            .upsert({
+              date: testDate,
+              hours: 0.1,
+              workout: "No",
+              updated_at: new Date().toISOString(),
+            })
+            .select();
+
+          if (error) {
+            addResult(`❌ Insert Error: ${error.message}`, "error");
+            addResult(`Error Code: ${error.code}`, "error");
+          } else {
+            addResult("✅ Test insert successful!", "success");
+            addResult(
+              `Inserted/Updated record: <pre>${JSON.stringify(
+                data,
+                null,
+                2
+              )}</pre>`,
+              "info"
+            );
+          }
+        } catch (err) {
+          addResult(`❌ JavaScript Error: ${err.message}`, "error");
+        }
+      };
+
+      window.fixDatabase = async function () {
+        addResult("🔧 Attempting to fix database issues...", "info");
+
+        try {
+          // This will show the SQL that should be run in Supabase
+          addResult(
+            "Please run the following SQL in your Supabase SQL Editor:",
+            "info"
+          );
+
+          const sql = `
+-- Fix RLS policies for daily_records
+DROP POLICY IF EXISTS "Allow all operations" ON daily_records;
+CREATE POLICY "Enable all operations for daily_records" ON daily_records 
+FOR ALL 
+TO anon, authenticated 
+USING (true) 
+WITH CHECK (true);
+
+-- Fix RLS policies for time_entries  
+DROP POLICY IF EXISTS "Allow all operations" ON time_entries;
+CREATE POLICY "Enable all operations for time_entries" ON time_entries 
+FOR ALL 
+TO anon, authenticated 
+USING (true) 
+WITH CHECK (true);
+
+-- Verify tables exist
+SELECT table_name FROM information_schema.tables 
+WHERE table_schema = 'public' 
+AND table_name IN ('daily_records', 'time_entries');
+
+-- Check current policies
+SELECT schemaname, tablename, policyname, permissive, roles, cmd, qual 
+FROM pg_policies 
+WHERE tablename IN ('daily_records', 'time_entries');
+                `;
+
+          addResult(`<pre>${sql}</pre>`, "info");
+        } catch (err) {
+          addResult(`❌ JavaScript Error: ${err.message}`, "error");
+        }
+      };
+    </script>
+  </body>
+</html>

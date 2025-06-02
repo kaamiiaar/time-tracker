@@ -251,10 +251,10 @@ async function updateDailyTotal(date) {
     const { data: existingData } = await supabase
       .from("daily_records")
       .select("workout")
-      .eq("date", date)
-      .single();
+      .eq("date", date);
 
-    const workout = existingData?.workout || "No";
+    const workout =
+      existingData && existingData.length > 0 ? existingData[0].workout : "No";
 
     const { error } = await supabase.from("daily_records").upsert({
       date,
@@ -274,15 +274,14 @@ async function getRecord(date) {
     const { data, error } = await supabase
       .from("daily_records")
       .select("hours, workout")
-      .eq("date", date)
-      .single();
+      .eq("date", date);
 
-    if (error && error.code !== "PGRST116") {
-      // PGRST116 = no rows found
+    if (error) {
       throw error;
     }
 
-    return data || { hours: 0, workout: "No" };
+    // Return first record if exists, otherwise return default
+    return data && data.length > 0 ? data[0] : { hours: 0, workout: "No" };
   } catch (error) {
     console.error("Failed to get record:", error);
     return { hours: 0, workout: "No" };

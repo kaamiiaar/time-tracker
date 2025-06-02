@@ -45,90 +45,134 @@ export function init(dbInstance) {
   // Auto-save when workout changes
   workoutCheckbox.addEventListener("change", saveRecord);
 
-  function loadRecord(date) {
-    const record = db.getRecord(date);
-    currentTotalHours = record.hours || 0;
-    workoutCheckbox.checked = record.workout === "Yes";
-    manualHoursInput.value = ""; // Always start fresh for adding
-    updateDisplay();
-    loadTimeEntries(date);
-    resetStopwatch();
+  async function loadRecord(date) {
+    try {
+      const record = await db.getRecord(date);
+      currentTotalHours = await db.getTotalHoursForDate(date);
+      workoutCheckbox.checked = record.workout === "Yes";
+      manualHoursInput.value = ""; // Always start fresh for adding
+      updateDisplay();
+      await loadTimeEntries(date);
+      resetStopwatch();
+    } catch (error) {
+      console.error("Failed to load record:", error);
+      // Set defaults on error
+      currentTotalHours = 0;
+      workoutCheckbox.checked = false;
+      updateDisplay();
+    }
   }
 
-  function loadTimeEntries(date) {
-    const entriesResult = db.getTimeEntries(date);
-    const entries = Array.isArray(entriesResult) ? entriesResult : [];
-    const entriesList = document.getElementById("time-entries-list");
+  async function loadTimeEntries(date) {
+    try {
+      const entriesResult = await db.getTimeEntries(date);
+      const entries = Array.isArray(entriesResult) ? entriesResult : [];
+      const entriesList = document.getElementById("time-entries-list");
 
-    if (!entriesList) {
-      console.error("Time entries list element not found");
-      return;
-    }
+      if (!entriesList) {
+        console.error("Time entries list element not found");
+        return;
+      }
 
-    if (entries.length === 0) {
-      entriesList.innerHTML = `
-        <div class="empty-entries">
-          <p>No time entries yet. Use the stopwatch or add manual hours to get started!</p>
+      if (entries.length === 0) {
+        entriesList.innerHTML = `
+          <div class="empty-entries">
+            <p>No time entries yet. Use the stopwatch or add manual hours to get started!</p>
+          </div>
+        `;
+        return;
+      }
+
+      // Build the entries list with bulk selection controls
+      const bulkControls = `
+        <div class="bulk-controls">
+          <label class="bulk-select">
+            <input type="checkbox" id="select-all">
+            <span>Select All</span>
+          </label>
+          <button id="delete-selected" class="delete-selected" disabled>
+            🗑️ Delete Selected (<span id="selected-count">0</span>)
+          </button>
         </div>
       `;
-      return;
+
+      const entriesHtml = entries
+        .map((entry) => {
+          // Ensure entry is a valid object with required properties
+          if (!entry || typeof entry !== "object") {
+            console.warn("Invalid entry:", entry);
+            return "";
+          }
+
+          const formattedTime = formatHoursToHMS(entry.hours || 0);
+          const timestamp = formatTimestamp(
+            entry.created_at || new Date().toISOString()
+          );
+          const icon = entry.type === "manual" ? "✏️" : "⏱️";
+          const typeLabel =
+            entry.type === "manual" ? "Manual Entry" : "Stopwatch Session";
+
+          return `
+          <div class="time-entry ${entry.type || "manual"}">
+            <div class="entry-checkbox">
+              <input type="checkbox" class="entry-select" value="${
+                entry.id || ""
+              }">
+            </div>
+            <div class="entry-info">
+              <div class="entry-type">${icon} ${typeLabel}</div>
+              <div class="entry-time">${formattedTime}</div>
+              <div class="entry-timestamp">${timestamp}</div>
+            </div>
+            <div class="entry-actions">
+              <button class="delete-entry" data-entry-id="${entry.id || 0}">
+                🗑️ Delete
+              </button>
+            </div>
+          </div>
+        `;
+        })
+        .filter((entry) => entry !== "") // Remove empty entries
+        .join("");
+
+      entriesList.innerHTML = bulkControls + entriesHtml;
+
+      // Add event listeners after creating the HTML
+      setupTimeEntriesEventListeners();
+    } catch (error) {
+      console.error("Failed to load time entries:", error);
+    }
+  }
+
+  function setupTimeEntriesEventListeners() {
+    // Select all checkbox
+    const selectAllCheckbox = document.getElementById("select-all");
+    if (selectAllCheckbox) {
+      selectAllCheckbox.addEventListener("change", toggleSelectAll);
     }
 
-    // Build the entries list with bulk selection controls
-    const bulkControls = `
-      <div class="bulk-controls">
-        <label class="bulk-select">
-          <input type="checkbox" id="select-all" onchange="window.todayModule.toggleSelectAll()">
-          <span>Select All</span>
-        </label>
-        <button id="delete-selected" class="delete-selected" onclick="window.todayModule.deleteSelected()" disabled>
-          🗑️ Delete Selected (<span id="selected-count">0</span>)
-        </button>
-      </div>
-    `;
+    // Delete selected button
+    const deleteSelectedBtn = document.getElementById("delete-selected");
+    if (deleteSelectedBtn) {
+      deleteSelectedBtn.addEventListener("click", async () => {
+        await deleteSelected();
+      });
+    }
 
-    const entriesHtml = entries
-      .map((entry) => {
-        // Ensure entry is a valid object with required properties
-        if (!entry || typeof entry !== "object") {
-          console.warn("Invalid entry:", entry);
-          return "";
-        }
+    // Individual entry checkboxes
+    const entryCheckboxes = document.querySelectorAll(".entry-select");
+    entryCheckboxes.forEach((checkbox) => {
+      checkbox.addEventListener("change", updateBulkControls);
+    });
 
-        const formattedTime = formatHoursToHMS(entry.hours || 0);
-        const timestamp = formatTimestamp(
-          entry.created_at || new Date().toISOString()
-        );
-        const icon = entry.type === "manual" ? "✏️" : "⏱️";
-        const typeLabel =
-          entry.type === "manual" ? "Manual Entry" : "Stopwatch Session";
-
-        return `
-        <div class="time-entry ${entry.type || "manual"}">
-          <div class="entry-checkbox">
-            <input type="checkbox" class="entry-select" value="${
-              entry.id || ""
-            }" onchange="window.todayModule.updateBulkControls()">
-          </div>
-          <div class="entry-info">
-            <div class="entry-type">${icon} ${typeLabel}</div>
-            <div class="entry-time">${formattedTime}</div>
-            <div class="entry-timestamp">${timestamp}</div>
-          </div>
-          <div class="entry-actions">
-            <button class="delete-entry" onclick="window.todayModule.deleteEntry(${
-              entry.id || 0
-            })">
-              🗑️ Delete
-            </button>
-          </div>
-        </div>
-      `;
-      })
-      .filter((entry) => entry !== "") // Remove empty entries
-      .join("");
-
-    entriesList.innerHTML = bulkControls + entriesHtml;
+    // Individual delete buttons
+    const deleteButtons = document.querySelectorAll(".delete-entry");
+    deleteButtons.forEach((button) => {
+      button.addEventListener("click", async (e) => {
+        const entryId = parseInt(e.target.getAttribute("data-entry-id"));
+        await deleteEntry(entryId);
+      });
+    });
   }
 
   function formatTimestamp(timestamp) {
@@ -140,25 +184,30 @@ export function init(dbInstance) {
     });
   }
 
-  function addManualHours() {
+  async function addManualHours() {
     const hoursToAdd = parseFloat(manualHoursInput.value) || 0;
 
     if (hoursToAdd > 0) {
-      const date = datePicker.value;
-      const entryId = db.addTimeEntry(
-        date,
-        hoursToAdd,
-        "manual",
-        "Manual time entry"
-      );
+      try {
+        const date = datePicker.value;
+        const entryId = await db.addTimeEntry(
+          date,
+          hoursToAdd,
+          "manual",
+          "Manual time entry"
+        );
 
-      if (entryId) {
-        currentTotalHours = db.getTotalHoursForDate(date);
-        manualHoursInput.value = ""; // Reset input after adding
-        updateDisplay();
-        loadTimeEntries(date); // Refresh the entries list
-        showAddConfirmation(hoursToAdd);
-      } else {
+        if (entryId) {
+          currentTotalHours = await db.getTotalHoursForDate(date);
+          manualHoursInput.value = ""; // Reset input after adding
+          updateDisplay();
+          await loadTimeEntries(date); // Refresh the entries list
+          showAddConfirmation(hoursToAdd);
+        } else {
+          showErrorMessage("Failed to add manual hours");
+        }
+      } catch (error) {
+        console.error("Failed to add manual hours:", error);
         showErrorMessage("Failed to add manual hours");
       }
     }
@@ -208,7 +257,7 @@ export function init(dbInstance) {
     }, 1000);
   }
 
-  function pauseStopwatch() {
+  async function pauseStopwatch() {
     isRunning = false;
     clearInterval(intervalId);
     startPauseBtn.textContent = "▶️ Start";
@@ -220,19 +269,24 @@ export function init(dbInstance) {
     const date = datePicker.value;
 
     if (elapsedHours > 0) {
-      const entryId = db.addTimeEntry(
-        date,
-        elapsedHours,
-        "stopwatch",
-        "Stopwatch session"
-      );
+      try {
+        const entryId = await db.addTimeEntry(
+          date,
+          elapsedHours,
+          "stopwatch",
+          "Stopwatch session"
+        );
 
-      if (entryId) {
-        currentTotalHours = db.getTotalHoursForDate(date);
-        updateDisplay();
-        loadTimeEntries(date); // Refresh the entries list
-        showStopwatchConfirmation(elapsedHours);
-      } else {
+        if (entryId) {
+          currentTotalHours = await db.getTotalHoursForDate(date);
+          updateDisplay();
+          await loadTimeEntries(date); // Refresh the entries list
+          showStopwatchConfirmation(elapsedHours);
+        } else {
+          showErrorMessage("Failed to save stopwatch time");
+        }
+      } catch (error) {
+        console.error("Failed to save stopwatch time:", error);
         showErrorMessage("Failed to save stopwatch time");
       }
     }
@@ -265,28 +319,73 @@ export function init(dbInstance) {
       .padStart(2, "0")}`;
   }
 
-  function deleteEntry(entryId) {
+  async function deleteEntry(entryId) {
     if (confirm("🗑️ Are you sure you want to delete this time entry?")) {
-      if (db.deleteTimeEntry(entryId)) {
-        const date = datePicker.value;
-        currentTotalHours = db.getTotalHoursForDate(date);
-        updateDisplay();
-        loadTimeEntries(date); // Refresh the entries list
-        showDeleteConfirmation();
+      // Find the delete button and show loading state
+      const deleteButton = document.querySelector(
+        `[data-entry-id="${entryId}"]`
+      );
+      if (deleteButton) {
+        const originalText = deleteButton.innerHTML;
+        deleteButton.disabled = true;
+        deleteButton.innerHTML = "🔄 Deleting...";
+
+        // Defer the heavy work to avoid blocking the UI
+        setTimeout(async () => {
+          try {
+            if (await db.deleteTimeEntry(entryId)) {
+              const date = datePicker.value;
+              currentTotalHours = await db.getTotalHoursForDate(date);
+              updateDisplay();
+              await loadTimeEntries(date); // Refresh the entries list
+              showDeleteConfirmation();
+            } else {
+              showErrorMessage("Failed to delete entry");
+              // Re-enable button on failure
+              deleteButton.disabled = false;
+              deleteButton.innerHTML = originalText;
+            }
+          } catch (error) {
+            console.error("Failed to delete entry:", error);
+            showErrorMessage("Failed to delete entry");
+            // Re-enable button on error
+            deleteButton.disabled = false;
+            deleteButton.innerHTML = originalText;
+          }
+        }, 10);
       } else {
-        showErrorMessage("Failed to delete entry");
+        // Fallback if button not found
+        try {
+          if (await db.deleteTimeEntry(entryId)) {
+            const date = datePicker.value;
+            currentTotalHours = await db.getTotalHoursForDate(date);
+            updateDisplay();
+            await loadTimeEntries(date);
+            showDeleteConfirmation();
+          } else {
+            showErrorMessage("Failed to delete entry");
+          }
+        } catch (error) {
+          console.error("Failed to delete entry:", error);
+          showErrorMessage("Failed to delete entry");
+        }
       }
     }
   }
 
-  function saveRecord() {
-    const date = datePicker.value;
-    const workout = workoutCheckbox.checked;
+  async function saveRecord() {
+    try {
+      const date = datePicker.value;
+      const workout = workoutCheckbox.checked;
 
-    // Update workout status in daily record
-    if (db.insertOrUpdateRecord(date, currentTotalHours, workout)) {
-      updateDisplay();
-    } else {
+      // Update workout status in daily record
+      if (await db.insertOrUpdateRecord(date, currentTotalHours, workout)) {
+        updateDisplay();
+      } else {
+        showErrorMessage("Failed to save data");
+      }
+    } catch (error) {
+      console.error("Failed to save record:", error);
       showErrorMessage("Failed to save data");
     }
   }
@@ -406,7 +505,7 @@ export function init(dbInstance) {
     }
   }
 
-  function deleteSelected() {
+  async function deleteSelected() {
     const selectedCheckboxes = document.querySelectorAll(
       ".entry-select:checked"
     );
@@ -422,56 +521,79 @@ export function init(dbInstance) {
         : `🗑️ Are you sure you want to delete ${selectedIds.length} time entries?\n\nThis action cannot be undone.`;
 
     if (confirm(confirmMessage)) {
-      let deletedCount = 0;
+      // Immediately disable the button and show loading state
+      const deleteSelectedBtn = document.getElementById("delete-selected");
+      const originalText = deleteSelectedBtn.innerHTML;
+      deleteSelectedBtn.disabled = true;
+      deleteSelectedBtn.innerHTML = "🔄 Deleting...";
 
-      selectedIds.forEach((id) => {
-        if (db.deleteTimeEntry(id)) {
-          deletedCount++;
+      // Defer the heavy work to avoid blocking the UI
+      setTimeout(async () => {
+        try {
+          let deletedCount = 0;
+
+          // Use Promise.all for parallel deletion instead of sequential
+          const deletePromises = selectedIds.map(async (id) => {
+            try {
+              const success = await db.deleteTimeEntry(id);
+              if (success) deletedCount++;
+              return success;
+            } catch (error) {
+              console.error(`Failed to delete entry ${id}:`, error);
+              return false;
+            }
+          });
+
+          await Promise.all(deletePromises);
+
+          if (deletedCount > 0) {
+            const date = datePicker.value;
+            // Update total hours and refresh UI
+            currentTotalHours = await db.getTotalHoursForDate(date);
+            updateDisplay();
+            await loadTimeEntries(date); // Refresh the entries list
+
+            const message =
+              deletedCount === 1
+                ? "✅ Entry deleted!"
+                : `✅ ${deletedCount} entries deleted!`;
+            showBulkDeleteConfirmation(message);
+          } else {
+            showErrorMessage("Failed to delete entries");
+          }
+        } catch (error) {
+          console.error("Failed to delete entries:", error);
+          showErrorMessage("Failed to delete entries");
+        } finally {
+          // Re-enable the button
+          deleteSelectedBtn.disabled = false;
+          deleteSelectedBtn.innerHTML = originalText;
         }
-      });
-
-      if (deletedCount > 0) {
-        const date = datePicker.value;
-        currentTotalHours = db.getTotalHoursForDate(date);
-        updateDisplay();
-        loadTimeEntries(date); // Refresh the entries list
-
-        const message =
-          deletedCount === 1
-            ? "✅ Entry deleted!"
-            : `✅ ${deletedCount} entries deleted!`;
-        showBulkDeleteConfirmation(message);
-      } else {
-        showErrorMessage("Failed to delete entries");
-      }
+      }, 10); // Small delay to allow UI to update
     }
   }
 
   // Expose public methods
   const publicMethods = {
-    loadRecordForDate: (date) => {
+    loadRecordForDate: async (date) => {
       datePicker.value = date;
-      loadRecord(date);
+      await loadRecord(date);
     },
     getCurrentData: () => ({
       date: datePicker.value,
       hours: currentTotalHours,
       workout: workoutCheckbox.checked,
     }),
-    deleteEntry: deleteEntry,
-    toggleSelectAll: toggleSelectAll,
-    updateBulkControls: updateBulkControls,
-    deleteSelected: deleteSelected,
   };
 
-  // Make methods available globally for onclick handlers
+  // Make methods available globally for onclick handlers (only needed for external access)
   window.todayModule = publicMethods;
 
   return publicMethods;
 }
 
-export function loadRecordForDate(date) {
-  const datePicker = document.getElementById("date-picker");
-  datePicker.value = date;
-  datePicker.dispatchEvent(new Event("change"));
+export async function loadRecordForDate(date) {
+  if (window.todayModule && window.todayModule.loadRecordForDate) {
+    await window.todayModule.loadRecordForDate(date);
+  }
 }
