@@ -2,15 +2,25 @@ let db, chart;
 
 export function init(dbInstance) {
   db = dbInstance;
+  // Ensure the statistics section is ready before initializing
+  if (document.readyState === "loading") {
+    document.addEventListener("DOMContentLoaded", () => {
+      initializeStatistics();
+    });
+  } else {
+    initializeStatistics();
+  }
+}
+
+function initializeStatistics() {
   // Wait for Chart.js to be available before setting up the chart
   waitForChart()
     .then(() => {
       setupChart();
-      updateChart();
     })
     .catch((error) => {
       console.error("Failed to load Chart.js:", error);
-      showEmptyState();
+      showChartError();
     });
 }
 
@@ -23,7 +33,7 @@ function waitForChart() {
     }
 
     let attempts = 0;
-    const maxAttempts = 50; // 5 seconds total
+    const maxAttempts = 100; // 10 seconds total
 
     const checkChart = setInterval(() => {
       attempts++;
@@ -39,6 +49,13 @@ function waitForChart() {
 }
 
 export function updateChart() {
+  // Ensure we have a valid database connection
+  if (!db) {
+    console.error("Database not initialized");
+    showChartError();
+    return;
+  }
+
   const stats = db.getStatistics();
 
   if (stats.recentData.length === 0) {
@@ -53,8 +70,13 @@ export function updateChart() {
   }
 
   // Ensure chart container exists
+  const chartContainer = document.querySelector(".chart-container");
+  if (!chartContainer) {
+    console.error("Chart container not found");
+    return;
+  }
+
   if (!document.querySelector("#stats-chart")) {
-    const chartContainer = document.querySelector(".chart-container");
     chartContainer.innerHTML =
       '<canvas id="stats-chart" width="400" height="200"></canvas>';
 
@@ -78,7 +100,10 @@ export function updateChart() {
 
 function setupChart() {
   const canvas = document.getElementById("stats-chart");
-  if (!canvas) return;
+  if (!canvas) {
+    console.error("Canvas element not found");
+    return;
+  }
 
   // Double-check Chart.js is available
   if (typeof Chart === "undefined") {
@@ -90,6 +115,11 @@ function setupChart() {
   const ctx = canvas.getContext("2d");
 
   try {
+    // Destroy existing chart if it exists
+    if (chart) {
+      chart.destroy();
+    }
+
     chart = new Chart(ctx, {
       type: "line",
       data: {
@@ -255,26 +285,29 @@ function setupChart() {
       },
     });
   } catch (error) {
-    console.error("Failed to create chart:", error);
+    console.error("Error creating chart:", error);
     showChartError();
   }
 }
 
 function updateChartData(stats) {
-  if (!chart) return;
+  if (!chart) {
+    console.warn("Chart not initialized yet");
+    return;
+  }
 
-  const labels = stats.recentData.map((record) => record.date);
-  const hoursData = stats.recentData.map(
-    (record) => parseFloat(record.hours) || 0
-  );
-  const workoutData = stats.recentData.map((record) =>
-    record.workout === "Yes" ? 1 : 0
-  );
+  // Format data for Chart.js
+  const labels = stats.recentData.map((d) => d.date);
+  const hoursData = stats.recentData.map((d) => parseFloat(d.hours));
+  const workoutData = stats.recentData.map((d) => (d.workout ? 1 : 0));
 
+  // Update chart data
   chart.data.labels = labels;
   chart.data.datasets[0].data = hoursData;
   chart.data.datasets[1].data = workoutData;
-  chart.update("active");
+
+  // Update the chart
+  chart.update();
 }
 
 function updateStatsSummary(stats) {
@@ -284,7 +317,12 @@ function updateStatsSummary(stats) {
     summaryDiv = document.createElement("div");
     summaryDiv.id = "stats-summary";
     const chartContainer = document.querySelector(".chart-container");
-    chartContainer.parentNode.insertBefore(summaryDiv, chartContainer);
+    if (chartContainer && chartContainer.parentNode) {
+      chartContainer.parentNode.insertBefore(summaryDiv, chartContainer);
+    } else {
+      console.error("Chart container parent not found");
+      return;
+    }
   }
 
   summaryDiv.innerHTML = `
