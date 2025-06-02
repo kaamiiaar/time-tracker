@@ -262,7 +262,7 @@ function getAllRecords() {
   }
 }
 
-function getStatistics() {
+function getStatistics(timeRange = "week") {
   try {
     const stats = {
       totalDays: 0,
@@ -273,6 +273,15 @@ function getStatistics() {
       recentData: [],
     };
 
+    // Calculate date filter for the past week if needed
+    let dateFilter = "";
+    if (timeRange === "week") {
+      const weekAgo = new Date();
+      weekAgo.setDate(weekAgo.getDate() - 7);
+      const weekAgoStr = weekAgo.toISOString().split("T")[0];
+      dateFilter = `WHERE date >= '${weekAgoStr}'`;
+    }
+
     // Get basic statistics
     const totalStmt = db.prepare(`
             SELECT 
@@ -281,6 +290,7 @@ function getStatistics() {
                 AVG(hours) as avgHours,
                 SUM(CASE WHEN workout = 'Yes' THEN 1 ELSE 0 END) as workoutDays
             FROM daily_records
+            ${dateFilter}
         `);
 
     if (totalStmt.step()) {
@@ -294,12 +304,14 @@ function getStatistics() {
     }
     totalStmt.free();
 
-    // Get recent 30 days data for chart
+    // Get recent data for chart - limit based on time range
+    const limit = timeRange === "week" ? 7 : 30;
     const recentStmt = db.prepare(`
             SELECT date, hours, workout 
             FROM daily_records 
+            ${dateFilter}
             ORDER BY date DESC 
-            LIMIT 30
+            LIMIT ${limit}
         `);
 
     while (recentStmt.step()) {

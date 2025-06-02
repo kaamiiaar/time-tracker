@@ -347,7 +347,7 @@ async function getAllRecords() {
   }
 }
 
-async function getStatistics() {
+async function getStatistics(timeRange = "week") {
   try {
     const defaultStats = {
       totalDays: 0,
@@ -358,11 +358,22 @@ async function getStatistics() {
       recentData: [],
     };
 
-    // Get all records
-    const { data: records, error } = await supabase
+    // Build query based on time range
+    let query = supabase
       .from("daily_records")
       .select("date, hours, workout")
       .order("date", { ascending: false });
+
+    // Add date filter for past week if needed
+    if (timeRange === "week") {
+      const weekAgo = new Date();
+      weekAgo.setDate(weekAgo.getDate() - 7);
+      const weekAgoStr = weekAgo.toISOString().split("T")[0];
+      query = query.gte("date", weekAgoStr);
+    }
+
+    // Get all records
+    const { data: records, error } = await query;
 
     if (error) {
       console.error("Supabase error in getStatistics:", error);
@@ -390,9 +401,10 @@ async function getStatistics() {
     stats.workoutPercentage =
       stats.totalDays > 0 ? (stats.workoutDays / stats.totalDays) * 100 : 0;
 
-    // Get recent 30 days data for chart (reverse to chronological order)
+    // Get recent data for chart - limit based on time range
+    const limit = timeRange === "week" ? 7 : 30;
     stats.recentData = records
-      .slice(0, 30)
+      .slice(0, limit)
       .reverse()
       .map((record) => ({
         date: record?.date || "",

@@ -1,4 +1,6 @@
-let db, chart;
+let db,
+  chart,
+  currentTimeRange = "week";
 
 export function init(dbInstance) {
   db = dbInstance;
@@ -13,6 +15,9 @@ export function init(dbInstance) {
 }
 
 function initializeStatistics() {
+  // Setup time range controls
+  setupTimeRangeControls();
+
   // Wait for Chart.js to be available before setting up the chart
   waitForChart()
     .then(() => {
@@ -22,6 +27,37 @@ function initializeStatistics() {
       console.error("Failed to load Chart.js:", error);
       showChartError();
     });
+}
+
+function setupTimeRangeControls() {
+  const pastWeekBtn = document.getElementById("past-week-btn");
+  const allTimeBtn = document.getElementById("all-time-btn");
+
+  if (pastWeekBtn && allTimeBtn) {
+    pastWeekBtn.addEventListener("click", () => {
+      setTimeRange("week");
+    });
+
+    allTimeBtn.addEventListener("click", () => {
+      setTimeRange("all");
+    });
+  }
+}
+
+function setTimeRange(timeRange) {
+  currentTimeRange = timeRange;
+
+  // Update button states
+  const pastWeekBtn = document.getElementById("past-week-btn");
+  const allTimeBtn = document.getElementById("all-time-btn");
+
+  if (pastWeekBtn && allTimeBtn) {
+    pastWeekBtn.classList.toggle("active", timeRange === "week");
+    allTimeBtn.classList.toggle("active", timeRange === "all");
+  }
+
+  // Update the chart
+  updateChart();
 }
 
 // Wait for Chart.js to be available
@@ -57,7 +93,7 @@ export async function updateChart() {
   }
 
   try {
-    const stats = await db.getStatistics();
+    const stats = await db.getStatistics(currentTimeRange);
 
     if (!stats || !stats.recentData || stats.recentData.length === 0) {
       showEmptyState();
@@ -169,7 +205,7 @@ function setupChart() {
         plugins: {
           title: {
             display: true,
-            text: "Productivity Trends (Last 30 Days)",
+            text: getChartTitle(),
             font: {
               size: 18,
               weight: "bold",
@@ -297,6 +333,12 @@ function setupChart() {
   }
 }
 
+function getChartTitle() {
+  return currentTimeRange === "week"
+    ? "Productivity Trends (Past Week)"
+    : "Productivity Trends (All Time)";
+}
+
 function updateChartData(stats) {
   if (!chart) {
     console.warn("Chart not initialized yet");
@@ -318,6 +360,9 @@ function updateChartData(stats) {
   chart.data.labels = labels;
   chart.data.datasets[0].data = hoursData;
   chart.data.datasets[1].data = workoutData;
+
+  // Update chart title
+  chart.options.plugins.title.text = getChartTitle();
 
   // Update the chart
   chart.update();
@@ -452,6 +497,10 @@ function showEmptyState() {
   const statisticsSection = document.getElementById("statistics-section");
   statisticsSection.innerHTML = `
         <h2>Productivity Statistics</h2>
+        <div class="time-range-controls">
+            <button id="past-week-btn" class="time-range-btn active">📅 Past Week</button>
+            <button id="all-time-btn" class="time-range-btn">🗓️ All Time</button>
+        </div>
         <div class="empty-state">
             <div style="font-size: 3rem; margin-bottom: 20px;">📈</div>
             <h3>No data to display yet!</h3>
@@ -461,6 +510,9 @@ function showEmptyState() {
             </button>
         </div>
     `;
+
+  // Re-setup time range controls after recreating the HTML
+  setupTimeRangeControls();
 }
 
 function formatChartDate(dateStr) {

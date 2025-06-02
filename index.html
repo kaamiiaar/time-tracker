@@ -432,6 +432,44 @@
         font-style: italic;
       }
 
+      /* Time Range Controls */
+      .time-range-controls {
+        display: flex;
+        gap: 12px;
+        margin-bottom: 20px;
+        justify-content: center;
+      }
+
+      .time-range-btn {
+        background: linear-gradient(135deg, #f8f9fa 0%, #e9ecef 100%);
+        color: #495057;
+        border: 2px solid #dee2e6;
+        padding: 10px 20px;
+        border-radius: 8px;
+        font-size: 0.9rem;
+        font-weight: 600;
+        cursor: pointer;
+        transition: all 0.3s ease;
+      }
+
+      .time-range-btn:hover {
+        transform: translateY(-2px);
+        box-shadow: 0 4px 12px rgba(102, 126, 234, 0.2);
+        border-color: #667eea;
+      }
+
+      .time-range-btn.active {
+        background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+        color: white;
+        border-color: #667eea;
+        box-shadow: 0 4px 12px rgba(102, 126, 234, 0.3);
+      }
+
+      .time-range-btn.active:hover {
+        transform: translateY(-2px);
+        box-shadow: 0 6px 16px rgba(102, 126, 234, 0.4);
+      }
+
       @keyframes slideIn {
         from {
           opacity: 0;
@@ -601,6 +639,14 @@
 
         <section id="statistics-section">
           <h2>Productivity Statistics</h2>
+          <div class="time-range-controls">
+            <button id="past-week-btn" class="time-range-btn active">
+              📅 Past Week
+            </button>
+            <button id="all-time-btn" class="time-range-btn">
+              🗓️ All Time
+            </button>
+          </div>
           <div class="chart-container">
             <canvas id="stats-chart" width="400" height="200"></canvas>
           </div>
